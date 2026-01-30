@@ -28,20 +28,32 @@ const OrderService = {
 };
 
 class CheckoutService {
-  private processedKeys = new Set<string>();
+  private transactionCache = new Map<
+    string,
+    { status: "processing" | "completed"; data?: any }
+  >();
 
   async processCheckout(
     userId: string,
     cartTotal: number,
     idempotencyKey: string
   ) {
-    let transaction_id: string | null = null;
-    let order_id: string | null = null;
-    try {
-      if (this.processedKeys.has(idempotencyKey)) {
-        return;
+    const cached = this.transactionCache.get(idempotencyKey);
+
+    if (cached) {
+      if (cached.status === "processing") {
+        throw new Error("Please wait, request in progress.");
       }
 
+      return cached.data;
+    }
+
+    this.transactionCache.set(idempotencyKey, { status: "processing" });
+
+    let transaction_id: string | null = null;
+    let order_id: string | null = null;
+
+    try {
       transaction_id = await PaymentProvider.charge(cartTotal, idempotencyKey);
 
       order_id = await OrderService.saveOrder({
@@ -49,12 +61,30 @@ class CheckoutService {
         transaction_id,
         cartTotal,
       });
+
+      const response = {
+        success: true,
+        order_id,
+      };
+
+      this.transactionCache.set(idempotencyKey, {
+        status: "completed",
+        data: response,
+      });
     } catch (err) {
-      if (transaction_id) {
-        PaymentProvider.refund(transaction_id!);
-      } else {
-        console.error("No transaction took place");
+      try {
+        if (transaction_id) {
+          await PaymentProvider.refund(transaction_id!);
+        }
+      } catch (refundErr) {
+        console.error(
+          "CRITICAL: Refund failed. Manual intervention needed for txn:",
+          transaction_id
+        );
       }
+
+      this.transactionCache.delete(idempotencyKey);
+      throw new Error("Checkout failed. No charges were made.");
     }
   }
 }
@@ -62,3 +92,23 @@ class CheckoutService {
 const checkout = new CheckoutService();
 
 checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+checkout.processCheckout("uid", 124, "idem");
+
